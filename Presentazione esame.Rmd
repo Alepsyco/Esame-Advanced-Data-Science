@@ -1,0 +1,384 @@
+---
+title: "Analisi del grafo di un forum in relazione al punteggio delle pagine"
+author: "Fioritto Alessandro 152205"
+date: "13/12/2024"
+output:
+  slidy_presentation: default
+css: ./style.css
+---
+
+
+```{r load-packages, include=FALSE}
+
+library(moments)
+library(ggplot2)
+library(dplyr)
+library(readxl)
+library(tidyr)
+library(igraph)
+
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+
+data <- read_excel("./relazioninew.xlsx")
+
+g <- graph_from_data_frame(data, directed = TRUE)
+
+nodi <- data$Node
+  
+archi <- data$Connection
+```
+
+## Inroduzione e spiegazione ambito
+
+Questa presentazione spiegherà in modo breve e conciso l'ambito di studio e le analisi fatte su un dataset riguardante un forum di scrittura collettiva online denominato "SCP Foundation"
+
+>- Il forum consiste di articoli catalogati come un enciclopedia che descrivono un fenomeno, oggetto, luogo o persona legata al paranormale. 
+
+>- L'analisi è stata compiuta su un singolo network dataset che mette in rapporto i vari articoli (dal numero 2 al 2000) qualora questi contengano un link di ipertesto che rimanda ad un altro di questi articoli, creando un grafo direzionato.
+
+>- Il dataset è stato costruito da me tramite web scraping manuale.
+
+```{r,echo=FALSE}
+cat("Estratto della tabella delle relazioni")
+data.frame(data[821:826,])
+```
+
+## Prima parte dell'analisi
+
+La prima parte consiste in un analisi generale, per determinare dati come diametro e tipologia del grafo
+
+
+```{r,echo=FALSE}
+
+#DISTANZA MEDIA NODI DIAMETRO RETE E DISTRIBUZIONE DISTANZE
+
+Dist <- distances(g)
+Dist [is.infinite(Dist)] <- NA            
+DistMedia <- mean(Dist, na.rm = TRUE)
+cat("La distanza media è ", DistMedia, "\n" )
+```
+>- Essendo molto bassa indicherebbe che questo è un grafo molto connesso ma per poterlo calcolare è stata eliminata la maggior parte dei nodi che non hanno archi. 
+
+>- Nello specifico sono stati eliminati 1575 nodi (il 78.79% del totale); da tutto ciò possiamo evincere che i percorsi tra i nodi siano perlopiù brevi e, se presenti, i percorsi lunghi siano di numero decisamente inferiore
+
+
+## Diametro della rete
+
+Verifichiamo calcolando il diametro e i nodi coinvolti
+
+```{r,echo=FALSE, out.width="82%", fig.align = 'center'}
+cat("Il diametro rappresenta la più grande distanza tra i cammini minimi di un grafo")
+
+Diametro <- diameter(g, directed = TRUE, unconnected = TRUE)
+NodiDiametro <- get_diameter(g, directed = TRUE, weights = NA)
+cat("Il diametro del grafo è ", Diametro, "e i nodi coinvolti sono i seguenti: \n", NodiDiametro)
+
+GrafoDiametro <- induced_subgraph(g, NodiDiametro)
+
+plot(
+  GrafoDiametro,
+  layout = layout_in_circle,
+  vertex.label = V(GrafoDiametro)$name,  
+  vertex.color = "#ffa600",                  
+  vertex.size = 40,                            
+  edge.color = "darkgrey",                         
+  edge.width = 2,                              
+)
+
+```
+Come teorizzato prima anche il diametro calcolato dimostra che il grafo ha percorsi particolarmente corti rispetto al numero di nodi
+
+## Indice di Assortività
+
+L'indice di assortività indica la tendenza dei nodi a collegarsi a nodi simili: ad esempio con un valore positivo di assortatività un nodo con alto OUT-DEGREE si collegherà ad altri nodi con alto OUT-DEGREE (nel caso OUT-OUT).
+
+```{r,echo=FALSE}
+GradoIN <- degree(g, mode = "in")
+GradoOUT <- degree(g, mode = "out")
+
+archi2 <- as_data_frame(g, what = "edges")
+
+# Aggiungi i gradi ai nodi corrispondenti agli archi
+archi2$out_from <- GradoOUT[archi2$from]
+archi2$out_to <- GradoOUT[archi2$to]
+archi2$in_from <- GradoIN[archi2$from]
+archi2$in_to <- GradoIN[archi2$to]
+
+# Calcola i 4 tipi di assortatività
+assortativita_out_out <- cor(archi2$out_from, archi2$out_to, use = "complete.obs")
+assortativita_in_in <- cor(archi2$in_from, archi2$in_to, use = "complete.obs")
+assortativita_out_in <- cor(archi2$out_from, archi2$in_to, use = "complete.obs")
+assortativita_in_out <- cor(archi2$in_from, archi2$out_to, use = "complete.obs")
+
+# Stampa i risultati
+cat("Assortatività OUT-OUT:", assortativita_out_out, "\n") 
+cat("Assortatività IN-IN:", assortativita_in_in, "\n") 
+cat("Assortatività OUT-IN:", assortativita_out_in, "\n") 
+cat("Assortatività IN-OUT:", assortativita_in_out, "\n") 
+
+```
+>- I valori vicini allo 0 rappresentano una mancanza di correlazione (OUT-OUT), quelli negativi una tendenza a connettersi a nodi con pochi collegamenti (tale tendenza può emergere anche in modo naturale).
+
+>- Non sembrano esserci dei pattern significativi (se non dettati da nodi con alte connessioni in uscita, come 978)
+
+## Tipologia di rete
+
+Creiamo infine un grafico log-log della distribuzione dei gradi per verificare se è segue una legge:
+
+```{r,echo=FALSE, out.width="82%", fig.align = 'center'}
+
+degree_data <- as.data.frame(table(GradoOUT))
+colnames(degree_data) <- c("Degree", "Frequency")
+degree_data$Degree <- as.numeric(as.character(degree_data$Degree))
+degree_data$Frequency <- as.numeric(degree_data$Frequency)
+degree_data <- degree_data[degree_data$Degree > 0 & degree_data$Frequency > 0, ] # rimuove frequenze zero o gradi zero
+
+fit <- lm(log10(Frequency) ~ log10(Degree), data = degree_data)
+
+ggplot(degree_data, aes(x = Degree, y = Frequency)) +
+  geom_point(color = "blue", size = 2) +  
+  geom_abline(
+    intercept = coef(fit)[1], 
+    slope = coef(fit)[2], 
+    color = "red", 
+    size = 1, 
+    linetype = "dashed"
+  ) +  
+  scale_x_log10() +  
+  scale_y_log10() +  
+  labs(
+    title = "Distribuzione log-log dell'OUT-DEGREE",
+    x = "Log10(Grado)",
+    y = "Log10(Frequenza)"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_line(size = 0.5, linetype = "dashed"),
+    text = element_text(size = 12)
+  )
+
+
+
+```
+Il grafico risultante indica un alto numero di gradi bassi e la linea retta è rapidamente decrescente: sembrerebbe simile ad una distribuzione scala free.
+
+>- Per assicurarsene va calcolata la pendenza della retta, che risulta essere 1.322, quindi non compresa tra 2 e 3 come è consueto per una distribuzione di questo tipo.
+
+>- Questo assieme a ciò che si può evincere dal grafico suggerisce si la presenza di nodi con grado elevato ma non in sufficiente numero da poter associare la distribuzione ad una tipologia scala free.
+
+
+## Seconda parte dell' analisi: ranking delle pagine
+
+La seconda parte dell'analisi si concetra sul cercare una correlazione tra la presenza di archi e il punteggio dato dagli utenti alle pagine; un utente può assegnare un + o un - ad ogni pagina e potrebbe esserci una correlazione tra la presenza di collegamenti alle e dalle pagine più valutate (similmente all'algoritmo HITS)
+
+```{r,echo=FALSE}
+
+ConnesseStrong <- components(g, mode = "strong")
+SCC <- which.max(ConnesseStrong$csize)
+NodiSCC <- which(ConnesseStrong$membership == SCC)
+cat("Nodi nella componente fortemente connessa più grande:\n")
+cat(V(g)$name[NodiSCC])
+
+```
+
+La maggior componente connessa è un sottografo che rappresenta una serie di 11 articoli che si linkano tra loro e trattano una narrativa strettamente legata tra loro
+
+```{r,echo=FALSE, out.width="82%", fig.align = 'center'}
+
+SCCgraph<- induced_subgraph(g, NodiSCC)
+plot(SCCgraph, vertex.color = "green", vertex.size = 40, edge.arrow.size = 0.5)
+
+rate <- list(
+  rate527 = 828,
+  rate629 = 151,
+  rate644 = 327,
+  rate905 = 288,
+  rate909 = 390,
+  rate913 = 239,
+  rate917 = 232,
+  rate920 = 476,
+  rate1007 = 380,
+  rate1799 = 138,
+  rate1908 = 85
+)
+
+MediaVotoSSC <- (rate$rate527 + rate$rate629 + rate$rate644 + rate$rate905 + rate$rate909 + rate$rate913  + rate$rate917  + rate$rate920  + rate$rate1007 + rate$rate1799 + rate$rate1908) / 11
+
+
+
+```
+Essendo completamente connesso il sottografo ha 110 archi. il punteggio medio è di 321.3; il nodo 527 è quello valutato di più (808)
+
+## Sottografi Casuali 1
+
+Analizziamo anche una serie di sottografi scelti casualmente
+
+```{r,echo=FALSE, out.width="82%", fig.align = 'center'}
+
+set.seed(43)
+Random1 <- sample(V(g)$name, 11, replace = FALSE)
+RandomGraph1 <- induced_subgraph(g, Random1)
+plot(RandomGraph1, vertex.color = "#ffa600", vertex.size = 40, edge.arrow.size = 0.5)
+
+rate <- c(rate, list(
+  rate1069 = 165,
+  rate297 = 495,
+  rate1733 = 1869,
+  rate1174 = 153,
+  rate67 = 558,
+  rate774 = 81,
+  rate1499 = 756,
+  rate441 = 125,
+  rate1753 = 327,
+  rate1870 = 180,
+  rate1032 = 723
+))
+
+MediaVotoRandom1 <- (rate$rate1069 + rate$rate297 + rate$rate1733 + rate$rate1174 + rate$rate67 + rate$rate774  + rate$rate1499  + rate$rate441  + rate$rate1753 + rate$rate1870 + rate$rate1032) / 11
+
+ArchiRandom1 <- degree(g, v = Random1, mode = "all")
+
+```
+
+
+Questo sottografo è completamente sconnesso ma tra i suoi nodi ci sono 6 archi che puntano a nodi del grafo principale; gli articoli una media di punteggio di 493.82, il nodo 1499 è quello più valutato (1869) ed ha 1 arco.
+
+>- Possiamo subito vedere che nonostante il numero totale di archi si sia abbassato il punteggio medio si è alzato di molto: questo è dovuto principalmente ad un singolo nodo più popolare degli altri
+
+## Sottografi Casuali 2
+
+Anche questo sottografo risulta completamente sconnesso; ha una media di punteggio di 341, il nodo 33 è quello più valutato (1075) ed ha 0 archi.
+
+```{r,echo=FALSE, out.width="80%", fig.align = 'center'}
+
+set.seed(413)
+Random2 <- sample(V(g)$name, 11, replace = FALSE)
+RandomGraph2 <- induced_subgraph(g, Random2)
+plot(RandomGraph2, vertex.color = "#ffa600", vertex.size = 40, edge.arrow.size = 0.5)
+
+rate <- c(rate, list(
+  rate457 = 703,
+  rate1541 = 382,
+  rate420 = 260,
+  rate33 = 1075,
+  rate1778 = 261,
+  rate1388 = 61,
+  rate1770 = 148,
+  rate59 = 272,
+  rate573 = 235,
+  rate465 = 157,
+  rate281 = 198
+))
+
+MediaVotoRandom2 <- (rate$rate457 + rate$rate1541 + rate$rate420 + rate$rate33 + rate$rate1778 + rate$rate1388  + rate$rate1770  + rate$rate59  + rate$rate573 + rate$rate465 + rate$rate281) / 11
+
+ArchiRandom2 <- degree(g, v = Random2, mode = "all")
+
+
+```
+
+Anche qui il punteggio medio risulta più alto dell'SSC e il nodo più popolare ha addirittura 0 archi: potrebbe essere un primo segnale del fatto che il punteggio non venga influenzato (o solo marginalmente) dai collegamenti.
+
+
+## Sottografi Casuali 3
+
+Ulteriore grafo sconnesso, con soltanto 2 archi totali: il punteggio medio è di 175.5, più basso dell'SSC.
+
+```{r,echo=FALSE, out.width="80%", fig.align = 'center'}
+
+set.seed(463)
+Random3 <- sample(V(g)$name, 11, replace = FALSE)
+RandomGraph3 <- induced_subgraph(g, Random3)
+plot(RandomGraph3, vertex.color = "#ffa600", vertex.size = 40, edge.arrow.size = 0.5)
+
+rate <- c(rate, list(
+  rate741 = 175,
+  rate850 = 104,
+  rate499 = 204,
+  rate137 = 160,
+  rate374 = 90,
+  rate291 = 303,
+  rate1458 = 32,
+  rate1543 = 344,
+  rate921 = 260,
+  rate1303 = 106,
+  rate894 = 153
+))
+
+MediaVotoRandom3 <- (rate$rate741 + rate$rate850 + rate$rate499 + rate$rate137 + rate$rate374 + rate$rate291  + rate$rate1458  + rate$rate1543  + rate$rate921 + rate$rate1303 + rate$rate894) / 11
+
+
+ArchiRandom3 <- degree(g, v = Random3, mode = "all")
+
+
+```
+
+>- Il grafo più popolare, il 1543 (344) ha 0 archi
+
+## Risultati
+
+>- Questa analisi sembra essere inconcludente nel avvalorare la tesi: gli articoli di punteggio più alto non sembrano essere influenzati dal basso numero di connessioni e, nonostante il punteggio medio degli articoli dell'SCC sia abbastanza alto non sembra essere particolarmente legato ai numerosi archi entranti ed uscenti da esso.
+
+
+## Analisi dei nodi rilevati nel diametro
+
+Analizziamo i nodi del diametro:
+
+```{r,echo=FALSE, out.width="80%", fig.align = 'center'}
+
+plot(
+  GrafoDiametro,
+  layout = layout_in_circle,
+  vertex.label = V(GrafoDiametro)$name,  
+  vertex.color = "#ffa600",                  
+  vertex.size = 40,                            
+  edge.color = "darkgrey",                         
+  edge.width = 2,                              
+)
+
+rate <- c(rate, list(
+  rate52 = 607,
+  rate8 = 1182,
+  rate500 = 1288,
+  rate231 = 2503,
+  rate682 = 3845,
+  rate182 = 345
+))
+
+MediaVotoDiametro <- (rate$rate52 + rate$rate682 + rate$rate8 + rate$rate500 + rate$rate231 + rate$rate182) / 6
+ArchiDiametroIN <- degree(g, v = NodiDiametro, mode = "in")
+ArchiDiametroOUT <- degree(g, v = NodiDiametro, mode = "out")
+```
+Gli articoli che fanno parte del diametro hanno un punteggio sosatanzialmente più alto dei nodi 
+
+```{r,echo=FALSE, out.width="80%", fig.align = 'center'}
+
+tabella <- data.frame(               
+  Archi_IN = c(ArchiDiametroIN), 
+  Archi_OUT = c(ArchiDiametroOUT),
+  Punteggio = c(rate$rate52,  rate$rate8,  rate$rate500,  rate$rate231, rate$rate682, rate$rate182) 
+)
+
+cat("nota: il numero di archi di ogni nodo considera anche il collegamento a se stesso")
+print(tabella)
+
+```
+>- Il punteggio di tutti questi nodi è sorprendentemente alto: la media è di 1628.33, decisamente più alta degli altri sottografi analizzati.
+
+>- Il numero di archi sia entranti che uscenti è particolarmente alto, soprattutto nel nodo 682: questo è un articolo particolarmente famoso sul forum il che ovviamente lo porta ad essere citato più volte e ad avere più notorietà.
+
+>- Il nodo 500 ha un alto numero di archi uscenti: questo è un dato curioso ma non molto rilevante al fine dell'analisi, visto che, come il nodo 978, è un articolo che basa interamente la sua narrazione sull'interazione con altri articoli (sia che questi abbiano un punteggio alto o basso)
+
+## Risultati e conclusioni
+
+>- Dalle varie analisi eseguite sembra che un punteggio alto (e quindi una notorietà maggiore) possa attirare collegamenti in entrata ma non influenzi per forza di cose il punteggio dei nodi collegati in uscita.
+
+>- L'analisi non dimostra però in modo certo la correlazione appena descritta: ciò è dovuto dal basso numero di nodi analizzati rispetto al totale (attualmente più di 8000) e dal completo tralasciamento degli articoli ausiliari (ovvero quelli non numerati, circa 10000).
+
+>- Per poter confermare o smentire al 100% la tesi iniziale sarebbe necessario automatizzare la raccolta di info (ad esempio tramite un javascript) ed estendere a tutte le pagine del sito la raccolta di dati nonchè analizzare anche il contenuto dell'articolo stesso.
+
+
