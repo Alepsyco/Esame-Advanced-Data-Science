@@ -274,8 +274,10 @@ degree_data$Frequency <- as.numeric(degree_data$Frequency)
 
 degree_data <- degree_data[degree_data$Degree > 0 & degree_data$Frequency > 0, ] # rimuove frequenze zero o gradi zero
 
+fit <- lm(log10(Frequency) ~ log10(Degree), data = degree_data)
+
 ggplot(degree_data, aes(x = Degree, y = Frequency)) +
-  geom_point(color = "blue", size = 2) +  
+  geom_point(color = "blue", size = 3) +  
   geom_abline(
     intercept = coef(fit)[1], 
     slope = coef(fit)[2], 
@@ -292,7 +294,6 @@ ggplot(degree_data, aes(x = Degree, y = Frequency)) +
   ) +
   theme_minimal() +
   theme(
-    panel.grid = element_line(size = 0.5, linetype = "dashed"),
     text = element_text(size = 12)
   )
 
