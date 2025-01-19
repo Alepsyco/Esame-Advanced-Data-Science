@@ -211,7 +211,7 @@ MediaVotoSSC <- (rate$rate527 + rate$rate629 + rate$rate644 + rate$rate905 + rat
 
 
 ```
-Essendo completamente connesso il sottografo ha 110 archi. il punteggio medio è di 321.3; il nodo 527 è quello valutato di più (808)
+Essendo completamente connesso il sottografo ha 110 archi; il punteggio medio è di 321.3; il nodo 527 è quello valutato di più (808)
 
 ## Sottografi Casuali 1
 
@@ -317,11 +317,11 @@ ArchiRandom3 <- degree(g, v = Random3, mode = "all")
 
 ```
 
->- Il grafo più popolare, il 1543 (344) ha 0 archi
+>- Il nodo più popolare, il 1543 (344) ha 0 archi
 
 ## Risultati
 
->- Questa analisi sembra essere inconcludente nel avvalorare la tesi: gli articoli di punteggio più alto non sembrano essere influenzati dal basso numero di connessioni e, nonostante il punteggio medio degli articoli dell'SCC sia abbastanza alto non sembra essere particolarmente legato ai numerosi archi entranti ed uscenti da esso.
+>- Questa analisi sembra essere inconcludente nel avvalorare la tesi: gli articoli di punteggio più alto non sembrano essere influenzati dal basso numero di connessioni e, nonostante il punteggio medio degli articoli dell'SCC sia abbastanza alto non sembra particolarmente legato ai numerosi archi entranti ed uscenti da esso.
 
 
 ## Analisi dei nodi rilevati nel diametro
