@@ -1,0 +1,22 @@
+/* scrolling */
+slides > slide {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+
+slides > slide.backdrop {
+  background: none !important;
+  background-color: white !important;
+}
+
+#footer {
+  display: none !important;  /* Nasconde completamente il numero di pagina */
+}
+
+body {
+  background-image: url("Spotify.jpg");  /* Sostituisci con il tuo file */
+  background-size: cover;  /* Copre tutta la finestra */
+  background-position: center;  /* Centra l'immagine */
+  background-repeat: no-repeat;  /* Evita ripetizioni */
+  background-attachment: fixed;  /* Fissa l'immagine mentre scorri le slide */
+}
