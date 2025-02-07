@@ -7,7 +7,7 @@ output:
   css: ./style.css
 
 setwd("C:/Users/Aless/OneDrive/Desktop/Data Science LoL R/Esame-Advanced-Data-Science")
-install.packages("ggthemes")
+install.packages("")
 
 ###############OPERAZIONI PRELIMINARI
 
@@ -20,7 +20,7 @@ library(poweRlaw)
 library(ggraph)
 library(scales)
 library(ggthemes)
-
+library(reshape2)
 
 data <- read.csv("spotify_songs_2k.csv")
 data <- data[!duplicated(data$song), ]
@@ -185,18 +185,18 @@ ggplot(graficoRGP, aes(x = nodi$popularity, y = degree(grafo), color = nodi$year
 archi_df$weight <- 1 / (1 + distanzamatrix[archi]) # senza pesi non funziona louvain, peso in base a similarità
 
 grafocom <- graph_from_data_frame(archi_df, directed = FALSE)
-E(grafocom)$weight <- archi_df$weight  # Assegna pesi agli archi
+E(grafocom)$weight <- archi_df$weight  # Assegna pesi agli archi, altrimenti louvain non funziona
 
-grafocom <- delete_vertices(grafocom, V(grafocom)[degree(grafocom) < 13]) # nodi con tante connessioni per migliorare visual
+grafocom <- delete_vertices(grafocom, V(grafocom)[degree(grafocom) < 13]) # solo nodi con tante connessioni per migliorare visual
 
 set.seed(112)
-comunità <- cluster_louvain(grafocom) #louvain
+comunità <- cluster_louvain(grafocom) 
 V(grafocom)$community <- membership(comunità)  # Assegna comunità ai nodi
 
 #cross_community per trovare archi tra comunità
 E(grafocom)$cross_community <- V(grafocom)[ends(grafocom, E(grafocom))[, 1]]$community != V(grafocom)[ends(grafocom, E(grafocom))[, 2]]$community
 
-#V(grafocom)$node_size <- degree(grafocom) / 3
+#V(grafocom)$node_size <- degree(grafocom) / 3 non cambia dimensione
 
 trasparente <- alpha("red", 0) ##per eliminare i collegamenti tra nodi della stessa comunità
 
@@ -224,7 +224,9 @@ ggraph(grafocom, layout = "fr") +
 ## spotify quindi classifica più in base a valori assegnati e ALTRE COSE AMICOCHAT
 
 #################################################################################################
-#INFERENZA SU ASSEGNAZIONE COMUNITA'
+#INFERENZA SU ASSEGNAZIONE COMUNITA' 
+
+##### NON ESEGUIRE PIU' DI UNA VOLTA, APPAIONO COLONNE EXTRA
 
 commdata <- data.frame(
   song = V(grafocom)$name,         
@@ -232,8 +234,56 @@ commdata <- data.frame(
 ) 
 data <- merge(data, commdata, by.x = "song", by.y = "song", all.x = TRUE) #merge comunità e dataset originale
 
-head(data)
+data <- data %>%
+  mutate(community = replace_na(community, 0))
 
+#######
+
+data2 <- data
+
+data2 <- data2 %>%
+  separate_rows(genre, sep = ",") %>% 
+  mutate(genre = trimws(genre))
+
+data2 <- data2 %>%
+  filter(genre != "set()", community != 0)
+
+heatmap_prova <- data2 %>%
+  group_by(community, genre) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  spread(genre, count, fill = 0) 
+
+heatmap_long <- heatmap_prova %>%
+  gather(key = "genre", value = "count", -community) %>%
+  mutate(count_log = log10(count + 1))  
+
+
+ggplot(heatmap_long, aes(x = as.factor(community), y = genre, fill = count_log)) + #SCALA LOGARITMICA PER MOSTRARE MEGLIO
+  geom_tile() +
+  scale_fill_viridis(option = "plasma", direction = -1, trans = "log10") +  
+  labs(title = "Distribuzione dei generi nelle comunità",
+       x = "Comunità",
+       y = "Genere",
+       fill = "Frequenza del genere" ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#################################################################################################
+# ASSORTATIVITA' e CENTRALITA'
+
+assortativita <- assortativity_degree(grafo, normalized = FALSE)
+print(assortativita)
+
+betwennessC <- betweenness(grafo, normalized = TRUE)  ##Senza normalized ho valori generici
+betweennessDF <- data.frame(
+  name = V(grafo)$name,  
+  betweenness = betwennessC
+)
+
+betweennessDF <- betweennessDF %>%
+  arrange(desc(betweenness)) %>%
+  head(10)
+print(head(betweennessDF))   ##Centralità betweenness non rilevante, nodo più centrale ha 0.02 (tanti percorsi tra canzoni)
 
 
 #################################################################################################
@@ -264,10 +314,8 @@ print(gradotabGN)
 #################################################################################################
 #appunti
 
-#TROVARE NEIGHBOORHOOD E VEDERE QUALI PARAMETRI INFLUENZANO DI PIU LA SIMILARITA E ALTRO
+
 #COMMENTA CODICE, RIMUOVI OOPSIES
-#prove con vari tagli sul grado di comunità
-#inferenza su comunità rilevate
 #################################################################################################
 #################################################################################################
 
