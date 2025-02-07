@@ -1,0 +1,326 @@
+---
+title: "Analisi del della similarità tra brani di spotify"
+author: "Fioritto Alessandro 152205"
+date: "21/01/2025"
+output:
+    ioslides_presentation: 
+css: style.css
+
+---
+
+
+```{r load-packages, include=FALSE}
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(igraph)
+library(poweRlaw)
+library(ggraph)
+library(scales)
+
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+
+data <- read.csv("spotify_songs_2k.csv")
+data <- data[!duplicated(data$song), ]
+nodi <- data %>%
+  select(song, artist, duration_ms, year, popularity, danceability, energy, loudness, valence, tempo, genre)
+simil <- data %>%
+  select(danceability, acousticness, instrumentalness, energy, loudness, valence, tempo) %>%
+  mutate(across(c(danceability, acousticness, instrumentalness, energy, loudness, valence, tempo), scale))
+distanzamatrix <- as.matrix(dist(simil))
+threshold <- 1.1 
+archi <- which(distanzamatrix < threshold & row(distanzamatrix) != col(distanzamatrix), arr.ind = TRUE)
+archi_df <- data.frame(
+  Source = nodi$song[archi[, 1]],
+  Target = nodi$song[archi[, 2]])
+
+grafo <- graph_from_data_frame(d = archi_df, vertices = nodi, directed = FALSE)
+layout <- layout_with_fr(grafo)
+
+```
+
+## Inroduzione e spiegazione ambito
+
+Questa presentazione ha l'obiettivo di spiegare in breve l'ambito di studio, ovvero la top 2000 delle canzoni di spotify dal 2000 al 2020
+
+>- il grafo rappresentativo è stato costruito con i nodi che rappresentano le canzoni e gli archi la similarità tra di esse.
+
+>- La similarità tra le canzoni è stata calcolata creando una matrice di n dimensioni (con n=7 per il numero di features che vengono assegnate da Spotify ad ogni brano) che rappresenta ogni nodo come un punto in uno spazio e gli assegna un collegamento se la vicinanza ad un altro nodo non supera una determinata soglia.
+
+
+## Prima parte dell'analisi
+
+La prima parte consiste in un analisi generale, per determinare dati come il diametro e la distanza media, per analizzare che tipo di grafico risulti dal grado di similarità calcolato.
+
+
+```{r,echo=FALSE}
+
+
+grado <- degree(grafo)
+gradotab <- table(grado)
+
+
+gradodf <- as.data.frame(gradotab)
+colnames(gradodf) <- c("Degree", "Frequency")
+
+nodomax <- names(grado[which.max(grado)])
+
+dist <- distances(grafo)
+dist [is.infinite(dist)] <- NA            
+distmedia <- mean(dist, na.rm = TRUE)
+
+
+tabelladist <- as.data.frame(table(dist))
+colnames(tabelladist) <- c("Distanza", "Frequenza")
+tabelladist$Distanza <- as.numeric(as.character(tabelladist$Distanza))
+tabelladist <- tabelladist[tabelladist$Distanza > 0, ] 
+
+cat("La distanza media è:", distmedia)
+print(tabelladist)
+```
+
+>- Considerando che il range tipico delle distanze si trova tra 2 e 6 una distanza di 4.44 è medio-bassa e, pur essendoci cammini decisamente più lunghi, sono rari quelli di distanza 10+
+
+
+
+```{r,echo=FALSE}
+ggplot(tabelladist, aes(x = Distanza, y = Frequenza)) +
+  geom_point(color = "#1DB954", size = 3) +  
+  geom_line(color = "#208A56", size = 1) + 
+  labs(
+    x = "Distanza tra nodi",
+    y = "Frequenza",
+    title = "Relazione tra distanza e frequenza delle distanze"
+  ) +
+  scale_x_continuous(breaks = seq(0, max(tabelladist$Distanza), by = 2)) +
+  scale_y_continuous(labels = label_number(accuracy = 1)) +  
+  theme_classic(base_size = 14)  
+
+```
+
+## Analisi generale /2
+
+Calcoliamo anche il diametro:
+
+
+```{r,echo=FALSE}
+diametro <- diameter(grafo, directed = FALSE, unconnected = TRUE)
+nodidiametro <- get_diameter(grafo, directed = FALSE, weights = NA)
+cat(diametro)
+
+
+```
+
+Il risultato di 21 su un grafo del genere dimostra che i nodi siano particolarmente connessi
+
+
+```{r,echo=FALSE}
+cat("Prima canzone:", names(nodidiametro[1])) 
+cat("Ultima canzone:", names(nodidiametro[21]))  
+
+##cat("Nodo con più connessioni:", nodomax, "con", max(grado), "connessioni\n")
+```
+>- Sia la canzone iniziale che finale hanno come genere pop o hip hop, complice anche il fatto che siano i generi più diffusi nel dataset
+
+>- Calcolando anche l'indice di assortatività del grado (che risulta essere di circa 0.6) vi è una chiara tendenza dei nodi di collegarsi a nodi con il grado simile al proprio: dovuto forse ai diversi generi, tra cui ne abbiamo alcuni prevalenti ed altri in numero molto scarso
+
+## Analisi generale /3
+
+Ho creato il grafico della distribuzione grado/frequenza:
+
+
+```{r,echo=FALSE}
+
+gradodf$Degree <- as.numeric(as.character(gradodf$Degree))
+gradodf$Frequency <- as.numeric(gradodf$Frequency)
+
+gradodf <- gradodf[gradodf$Degree > 0 & gradodf$Frequency > 0, ] #per evitare errori in regressione
+
+log_degree <- log10(gradodf$Degree)
+log_frequency <- log10(gradodf$Frequency)
+
+
+model <- lm(gradodf$Frequency ~ gradodf$Degree)
+
+
+ggplot(model, aes(x = gradodf$Degree, y = gradodf$Frequency)) +
+  geom_point(color = "#1DB954", shape = 16, size=2) +  
+  geom_smooth(method = "lm", color = "white", linetype = "dashed", se = FALSE) +  
+  labs(
+    x = "Log10(Grado)",
+    y = "Log10(Frequenza)",
+    title = "Distribuzione dei Gradi in scala logaritmica"
+  ) +
+  theme_minimal() 
+
+
+model <- lm(log_frequency ~ log_degree)
+
+```
+
+>- Guardando il grafo è possibile notare un rapporto inversamente proporzionale tra grado e frequenza: all'aumentare del grado la frequenza dimiuisce sensibilmente
+
+
+>- La forma del grafico ricorda una coda lunga, tipica della power law; per verificare ho creato il grafico in scala logaritmica:
+
+
+```{r,echo=FALSE}
+
+ggplot(model, aes(x = log_degree, y = log_frequency)) +
+  geom_point(color = "#1DB954", shape = 16, size=2) +  
+  geom_smooth(method = "lm", color = "darkgrey", linetype = "dashed", se = FALSE) +  
+  labs(
+    x = "Log10(Grado)",
+    y = "Log10(Frequenza)",
+    title = "Distribuzione dei Gradi in scala logaritmica"
+  ) +
+  theme_minimal()  
+
+# -1.12 
+
+
+```
+ 
+>- La pendenza della retta è di -1.12: questo sarebbe anche l'eventuale esponente della power law.
+
+>- Nonostante questo valore si trovi solitamente tra -2 e -3 posso affermare che non segua le proprietà di una rete scala free classica ma che abbia comuque qualche caratteristica di una distribuzione power law (con crescita lenta).
+
+
+
+## Trovare correlazioni
+
+Visto che il grafo è stato creato tramite un treshold indicativo che detta il suo numero di connessioni potrebbe essere interessante cercare eventuali correlazioni tra grado di un nodo e gli attributi non legati al calcolo della similarità tra brani
+
+
+>- come esempio, un grafico grado/popolarità (la popolarità è un dato estratto al momento della query)
+
+```{r,echo=FALSE}
+
+graficoRGP <- data.frame(grado = degree(grafo), popolarità = V(grafo)$popularity)
+
+ggplot(graficoRGP, aes(x = nodi$popularity, y = degree(grafo), color = nodi$year)) +
+  geom_point(alpha = 0.6, size = 2) +
+  scale_color_gradientn(name = "Anno", colors = c("#003d00", "#009000", "#00c33c", "#1DD954")) +
+  labs(title = "Relazione Grado-Popolarità", x = "Grado del Nodo", y = "Popolarità") +
+  theme_minimal()
+
+##Non sembrano esserci correlazioni significative tra grado (similarità tra canzoni) e popolarità delle canzoni:
+##se ci fosse correlazione canzoni con più collegamenti = più simili tra loro in top 2000 = stile più popolare = più popolare
+
+
+```
+
+>- Da questo grafico non sembrano esserci correlazioni significative tra grado (similarità tra canzoni) e popolarità delle canzoni: se ci fosse una correlazione le canzoni con più collegamenti sarebbero più simili tra loro, il che indicherebbe uno stile/genere più popolare e di conseguenza canzoni con popolarità più alta.
+
+
+## Rilevamento delle comunità
+
+Sono state inoltre rilevate le comunità presenti nel grafo, eliminando però i nodi con un grado inferiore a 40 per migliorare la visibilità
+
+```{r,echo=FALSE}
+
+archi_df$weight <- 1 / (1 + distanzamatrix[archi])
+
+grafocom <- graph_from_data_frame(archi_df, directed = FALSE)
+E(grafocom)$weight <- archi_df$weight  
+grafocom <- delete_vertices(grafocom, V(grafocom)[degree(grafocom) < 13 ]) 
+set.seed(112)
+comunità <- cluster_louvain(grafocom)
+V(grafocom)$community <- membership(comunità)  
+
+E(grafocom)$cross_community <- V(grafocom)[ends(grafocom, E(grafocom))[, 1]]$community != V(grafocom)[ends(grafocom, E(grafocom))[, 2]]$community
+
+trasparente <- alpha("red", 0) 
+
+cat("Numero di connessioni tra nodi della stessa comunità:", (sum(!E(grafocom)$cross_community)), "\n")
+cat("Numero di connessioni tra nodi di comunità diverse:", (sum(E(grafocom)$cross_community)), "\n")
+
+```
+
+>- Anche diminuendo il grado minimo per essere inclusi nel calcolo il rapporto tra gli archi tende a rimanere 1/2.
+
+>- Inoltre è giusto citare il fatto che va impostato un seed per il calcolo delle comunità in quanto l'algoritmo elabora i nodi in modo casuale e la scelta dei nodi iniziali può influenzare il risultato finale
+
+
+```{r,echo=FALSE}
+
+ggraph(grafocom, layout = "fr") + 
+  geom_edge_link(aes(color = factor(E(grafocom)$cross_community)), show.legend = FALSE) +  
+  geom_node_point(aes(color = factor(V(grafocom)$community)), size = 3) +  
+  scale_edge_color_manual(values = c(trasparente, "#1DB954")) +  
+  scale_color_viridis_d(option = "plasma", name="Comunità") +  
+  theme_void() +  
+  ggtitle("Grafo delle comunità (in verde archi tra comunità diverse)")
+
+
+## Trovando 7 comunità che sono ben connesse anche tra loro i generi assegnati 
+## sono più o meno indicativi in quanto ci sono generi pop in qualsiasi delle comunità (genere pop è abbastanza generico)
+## questoi cambia molto a seconda dei valori assegnati mentre il genere è più generico come classificazione
+## spotify quindi classifica più in base a valori assegnati e ALTRE COSE AMICOCHAT
+
+cat("Le comunità sono composte da questo numero di nodi:", (table(V(grafocom)$community)))
+
+```
+
+## Rilevamento delle comunità \2
+
+Notiamo che pur essendo le comunità molto più strettamente collegate sono anche abbastanza collegate tra loro.
+
+>- Probabilmente ciò è dovuto al fatto che le canzoni appartenenti alla top 2000 sono di per se molto simili e pur appartenendo a generi diversi (e trovando quindi maggior affinità tra loro) hanno comunque un alto grado di connettività.
+
+
+## Rilevamento comunità \3
+
+Per verificare ulteriormente se le comunità sono in qualche modo sovrapponibili alla divisione per generi ho creato una heatmap generi/comunità:
+
+```{r,echo=FALSE}
+
+commdata <- data.frame(
+  song = V(grafocom)$name,         
+  community = V(grafocom)$community  
+) 
+data <- merge(data, commdata, by.x = "song", by.y = "song", all.x = TRUE) 
+
+data <- data %>%
+  mutate(community = replace_na(community, 0))
+
+data2 <- data
+
+data2 <- data2 %>%
+  separate_rows(genre, sep = ",") %>% 
+  mutate(genre = trimws(genre))
+
+data2 <- data2 %>%
+  filter(genre != "set()", community != 0)
+
+heatmap_prova <- data2 %>%
+  group_by(community, genre) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  spread(genre, count, fill = 0) 
+
+heatmap_long <- heatmap_prova %>%
+  gather(key = "genre", value = "count", -community) %>%
+  mutate(count_log = log10(count + 1))  
+
+
+ggplot(heatmap_long, aes(x = as.factor(community), y = genre, fill = count_log)) + #SCALA LOGARITMICA PER MOSTRARE MEGLIO
+  geom_tile() +
+  scale_fill_viridis(option = "plasma", direction = -1, trans = "log10") +  
+  labs(title = "Distribuzione dei generi nelle comunità",
+       x = "Comunità",
+       y = "Genere",
+       fill = "Frequenza del genere" ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+>- Guardando la heatmap non sembrano esserci divisioni marcate che indicano una prevalenza di un determinato genere in una specifica comunità; questo è dovuto, come detto prima, alla similarità tra le canzoni di successo negli anni ma anche all'assegnazione di più generi ad un singolo brano.
+
+>- Possiamo concludere che un calcolo delle comunità, se correttamente attuato, potrebbe essere utile a Spotify per scegliere quali canzoni consigliare seguendo un flusso sensato e passando da un genere all'altro in modo graduale (ad esempio, nodi con alta betweenness centrality sono utili per passare da tipo di musica ad un altro gradualmente)
