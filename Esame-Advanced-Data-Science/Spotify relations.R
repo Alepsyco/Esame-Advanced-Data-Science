@@ -7,13 +7,14 @@ output:
   css: ./style.css
 
 setwd("C:/Users/Aless/OneDrive/Desktop/Data Science LoL R/Esame-Advanced-Data-Science")
-install.packages("")
+install.packages("moments")
 
 ###############OPERAZIONI PRELIMINARI
 
 library(ggplot2)
 library(dplyr)
 library(tidyr)
+library(moments)
 library(tidyverse)
 library(igraph)
 library(poweRlaw)
@@ -121,12 +122,12 @@ print(distmedia)
 #LA DISTANZA MEDIA E' 4.44, abbastanza bassa 
 
 
-#Tabella delle distanze tra i nodi e grafico ####ELIMINA NODI GRADO 0
+#Tabella delle distanze tra i nodi e grafico 
 
 tabelladist <- as.data.frame(table(dist))
 colnames(tabelladist) <- c("Distanza", "Frequenza")
 tabelladist$Distanza <- as.numeric(as.character(tabelladist$Distanza))
-tabelladist <- tabelladist[tabelladist$Distanza > 0, ] 
+tabelladist <- tabelladist[tabelladist$Distanza > 0, ]  #elimina nodi distanza 0 (se stessi)
 
 print(tabelladist)
 
@@ -148,9 +149,9 @@ nodidiametro <- get_diameter(grafo, directed = FALSE, weights = NA)
 print(diametro)
 cat("Prima canzone:", names(nodidiametro[1])) 
 cat("Ultima canzone:", names(nodidiametro[22]))  
-###entrambe canzoni pop e/o hiphop
+###entrambe canzoni pop e/o hiphop generi più frequenti
 
-grafodiam <- induced_subgraph(grafo, nodidiametro)    ###
+grafodiam <- induced_subgraph(grafo, nodidiametro)    
 
 plot(
   grafodiam,
@@ -217,7 +218,7 @@ ggraph(grafocom, layout = "fr") +
   ggtitle("Grafo delle comunità (in verde archi tra comunità diverse)")
 
 
-### prova <13 per 9 comunità o torna a 40 per 7 ben definite
+
 ## Trovando 7/9 comunità che sono ben connesse anche tra loro i generi assegnati 
 ## sono più o meno indicativi in quanto ci sono generi pop in qualsiasi delle comunità (genere pop è abbastanza generico)
 ## questoi cambia molto a seconda dei valori assegnati mentre il genere è più generico come classificazione
@@ -290,25 +291,24 @@ print(head(betweennessDF))   ##Centralità betweenness non rilevante, nodo più 
 ##################################################################################################
 #PROVE
 
-dataGN <- read.csv("spotify_songs_2k_2.csv")
-dataGN <- data[!duplicated(data$song), ]
+print(transitivity(grafo, type = "global")) 
+#TRANSITIVITA' GLOBALE GRAFO 0.4, DATO CI DICE CI SONO ALCUNI TRIANGOLI MA NON MOLTI
+#creazione di comunità come sopra, forse non vale la pena citare
 
-# Definizione dei nodi (ogni canzone è un nodo)
-nodesGN <- data %>%
-  select(song, artist, duration_ms, popularity, danceability, energy, loudness, valence, tempo, genre)
+skewness <- (skewness(grado))
+print(skewness)
+#SKEWNESS GRADI 1.4, CODA A DESTRA QUINDI DISRIBUZIONE POWER LAW (verifica con altro)
 
 
-similGN <- data %>%
-  separate(genre, into = paste0("genre_", 1:5), sep = ", ", fill = "right")
-
-nodesGN <- nodesGN %>%
-  distinct(song, .keep_all = TRUE)
-
-grafoGN <- graph_from_data_frame(d = archiGN, vertices = nodesGN, directed = FALSE)
-
-gradoGN <- degree(grafoGN)
-gradotabGN <- table(gradoGN)
-print(gradotabGN) 
+# Visualizzazione del grafo (NON ESEGUIRE)
+plot(
+  grafo,
+  layout = layout,
+  vertex.size = 5,
+  vertex.label = NA,             # Rimuove le etichette per evitare confusione
+  edge.arrow.size = 0.5,         # Dimensione delle frecce
+  main = "Grafo delle Canzoni Spotify"
+)
 
 #################################################################################################
 #################################################################################################
@@ -320,13 +320,4 @@ print(gradotabGN)
 #################################################################################################
 
 
-# Visualizzazione del grafo
-plot(
-  grafo,
-  layout = layout,
-  vertex.size = 5,
-  vertex.label = NA,             # Rimuove le etichette per evitare confusione
-  edge.arrow.size = 0.5,         # Dimensione delle frecce
-  main = "Grafo delle Canzoni Spotify"
-)
 

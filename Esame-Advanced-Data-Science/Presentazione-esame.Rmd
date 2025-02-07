@@ -14,11 +14,14 @@ css: style.css
 library(ggplot2)
 library(dplyr)
 library(tidyr)
+library(moments)
 library(tidyverse)
 library(igraph)
 library(poweRlaw)
 library(ggraph)
 library(scales)
+library(ggthemes)
+library(reshape2)
 
 ```
 
@@ -164,10 +167,17 @@ model <- lm(log_frequency ~ log_degree)
 
 ```
 
->- Guardando il grafo è possibile notare un rapporto inversamente proporzionale tra grado e frequenza: all'aumentare del grado la frequenza dimiuisce sensibilmente
+>- Guardando il grafo è possibile notare un rapporto inversamente proporzionale tra grado e frequenza: all'aumentare del grado la frequenza dimiuisce sensibilmente; dimostrato anche dall'indice di assimmetria:
+
+```{r,echo=FALSE}
+
+skewness <- (skewness(grado))
+cat("Indice di assimmetria di grado:", skewness)
 
 
->- La forma del grafico ricorda una coda lunga, tipica della power law; per verificare ho creato il grafico in scala logaritmica:
+```
+
+>- La forma del grafico ricorda inoltre una coda lunga, tipica della power law; per verificare ho creato il grafico in scala logaritmica:
 
 
 ```{r,echo=FALSE}
@@ -191,7 +201,7 @@ ggplot(model, aes(x = log_degree, y = log_frequency)) +
 
 >- Nonostante questo valore si trovi solitamente tra -2 e -3 posso affermare che non segua le proprietà di una rete scala free classica ma che abbia comuque qualche caratteristica di una distribuzione power law (con crescita lenta).
 
-
+>- 
 
 ## Trovare correlazioni
 
@@ -264,7 +274,8 @@ ggraph(grafocom, layout = "fr") +
 ## questoi cambia molto a seconda dei valori assegnati mentre il genere è più generico come classificazione
 ## spotify quindi classifica più in base a valori assegnati e ALTRE COSE AMICOCHAT
 
-cat("Le comunità sono composte da questo numero di nodi:", (table(V(grafocom)$community)))
+cat("Le comunità sono composte da questo numero di nodi:")
+cat(table(V(grafocom)$community))
 
 ```
 
