@@ -155,9 +155,9 @@ ggplot(model, aes(x = gradodf$Degree, y = gradodf$Frequency)) +
   geom_point(color = "#1DB954", shape = 16, size=2) +  
   geom_smooth(method = "lm", color = "white", linetype = "dashed", se = FALSE) +  
   labs(
-    x = "Log10(Grado)",
-    y = "Log10(Frequenza)",
-    title = "Distribuzione dei Gradi in scala logaritmica"
+    x = "Grado",
+    y = "Frequenza",
+    title = "Distribuzione dei Gradi"
   ) +
   theme_minimal() 
 
