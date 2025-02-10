@@ -29,14 +29,15 @@ data <- data[!duplicated(data$song), ]
 
 ##########################################################################################
 
+#Selezione attributi su nodi (es nodi$song)
 nodi <- data %>%
   select(song, artist, duration_ms, year, popularity, danceability, energy, loudness, valence, tempo, genre)
 
 
-# Calcolo della similarità (distanza euclidea tra caratteristiche selezionate)
+# Calcolo della similarità (distanza euclidea tra caratteristiche selezionate, 7)
 simil <- data %>%
   select(danceability, acousticness, instrumentalness, energy, loudness, valence, tempo) %>%
-  mutate(across(c(danceability, acousticness, instrumentalness, energy, loudness, valence, tempo), scale))
+  mutate(across(c(danceability, acousticness, instrumentalness, energy, loudness, valence, tempo), scale)) #
 
 distanzamatrix <- as.matrix(dist(simil))
 
